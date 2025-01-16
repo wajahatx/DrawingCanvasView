@@ -47,6 +47,7 @@ public class DrawingCanvasView: UIView {
     }
     
     private func setupImageView() {
+        imageView.image = UIImage()
         imageView.translatesAutoresizingMaskIntoConstraints = false
         imageView.contentMode = .scaleAspectFit
         self.addSubview(imageView)
@@ -69,7 +70,7 @@ public class DrawingCanvasView: UIView {
         let filteredImage = ciImage.filteredImage()
         if let maskedImage = filteredImage.maskWithColor(color: brushColor)?.flipVertically(){
             imageView.image = maskedImage
-            refresh()
+            imageStack.append(maskedImage)
         }
     }
     public func setbrushSize(size: CGFloat) {
@@ -110,25 +111,26 @@ public class DrawingCanvasView: UIView {
             isDrawing = false
             if let image = imageView.image, !image.imageIsEmpty() {
                 imageStack.append(image)
-                redoStack.removeAll() // Clear redo stack after new drawing
+                redoStack.removeAll()
             }
         }
     }
     
 
     private func drawLineFrom(_ fromPoint: CGPoint, toPoint: CGPoint) {
-        guard let originalImage = imageView.image else { return }
-        guard originalImage.size != .zero else { return }
+        var originalImage = imageView.image ?? UIImage()
+        var size = originalImage.size == .zero ? CGSize(width: imageView.frame.width, height: imageView.frame.height) : originalImage.size
+        guard size != .zero else { return }
 
-        let scaleX = originalImage.size.width / imageView.frame.size.width
-        let scaleY = originalImage.size.height / imageView.frame.size.height
+        let scaleX = size.width / imageView.frame.size.width
+        let scaleY = size.height / imageView.frame.size.height
 
         let scaledFromPoint = CGPoint(x: fromPoint.x * scaleX, y: fromPoint.y * scaleY)
         let scaledToPoint = CGPoint(x: toPoint.x * scaleX, y: toPoint.y * scaleY)
 
-        let renderer = UIGraphicsImageRenderer(size: originalImage.size)
+        let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { context in
-            // Draw the original image
+            
             originalImage.draw(at: .zero)
             
             context.cgContext.move(to: scaledFromPoint)

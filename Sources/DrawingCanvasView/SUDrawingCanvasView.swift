@@ -62,11 +62,13 @@ public class CanvasController: ObservableObject {
     public func setImage(image: UIImage?) {
         guard let image else { return }
         canvasView.setImage(image: image)
+        adjustCanvasSizeToAspectRatio(for: image)
     }
     
     public func setMaskToImage(image: UIImage?) {
         guard let image else { return }
         canvasView.setMaskToImage(image: image)
+        adjustCanvasSizeToAspectRatio(for: image)
     }
     public func getMask() -> UIImage? {
         self.canvasView.currentMaskImage?.convertTransparentToBlackAndOpaqueToWhite()
@@ -74,6 +76,17 @@ public class CanvasController: ObservableObject {
     public func getImage() -> UIImage? {
         self.canvasView.currentMaskImage
     }
+    private func adjustCanvasSizeToAspectRatio(for image: UIImage) {
+           let imageWidth = image.size.width
+           let imageHeight = image.size.height
+           
+           let aspectRatio = imageWidth / imageHeight
+           
+            var newSize = self.canvasView.frame.size
+           newSize.height = newSize.width / aspectRatio
+           
+           canvasView.frame.size = newSize
+       }
 }
 
 extension CanvasController: @preconcurrency DrawingCanvasDelegate {
