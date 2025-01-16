@@ -61,6 +61,10 @@ public class DrawingCanvasView: UIView {
     }
     
     public func setImage(image: UIImage) {
+            imageView.image = image
+            refresh()
+    }
+    public func setMaskToImage(image: UIImage) {
         let ciImage = CIImage(cgImage: (image.cgImage)!)
         let filteredImage = ciImage.filteredImage()
         if let maskedImage = filteredImage.maskWithColor(color: brushColor)?.flipVertically(){
@@ -111,15 +115,26 @@ public class DrawingCanvasView: UIView {
         }
     }
     
+
     private func drawLineFrom(_ fromPoint: CGPoint, toPoint: CGPoint) {
-        guard imageView.frame.size != .zero else { return }
-        let renderer = UIGraphicsImageRenderer(size: imageView.frame.size)
+        guard let originalImage = imageView.image else { return }
+        guard originalImage.size != .zero else { return }
+
+        let scaleX = originalImage.size.width / imageView.frame.size.width
+        let scaleY = originalImage.size.height / imageView.frame.size.height
+
+        let scaledFromPoint = CGPoint(x: fromPoint.x * scaleX, y: fromPoint.y * scaleY)
+        let scaledToPoint = CGPoint(x: toPoint.x * scaleX, y: toPoint.y * scaleY)
+
+        let renderer = UIGraphicsImageRenderer(size: originalImage.size)
         let image = renderer.image { context in
-            imageView.image?.draw(at: .zero)
-            context.cgContext.move(to: fromPoint)
-            context.cgContext.addLine(to: toPoint)
+            // Draw the original image
+            originalImage.draw(at: .zero)
+            
+            context.cgContext.move(to: scaledFromPoint)
+            context.cgContext.addLine(to: scaledToPoint)
             context.cgContext.setLineCap(.round)
-            context.cgContext.setLineWidth(brushWidth)
+            context.cgContext.setLineWidth(brushWidth * scaleX)
             context.cgContext.setStrokeColor(brushColor.cgColor)
             context.cgContext.setBlendMode(blendMode)
             context.cgContext.strokePath()
@@ -164,7 +179,37 @@ public class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
-    
+    func convertTransparentToBlackAndOpaqueToWhite() -> UIImage? {
+            guard let cgImage = self.cgImage else { return nil }
+            
+            let width = cgImage.width
+            let height = cgImage.height
+            let colorSpace = CGColorSpaceCreateDeviceGray()
+            
+            // Create a bitmap context with only alpha channel (1 bit per pixel)
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+            
+            // Draw the image in the context
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            
+            // Get the pixel data from the context
+            guard let data = context.data else { return nil }
+            
+            // Convert the pixel data
+            let pixelBuffer = data.bindMemory(to: UInt8.self, capacity: width * height)
+            for y in 0..<height {
+                for x in 0..<width {
+                    let pixelIndex = y * width + x
+                    let alphaValue = pixelBuffer[pixelIndex]
+                    pixelBuffer[pixelIndex] = alphaValue > 0 ? 255 : 0
+                }
+            }
+            
+            // Create a new image from the pixel data
+            guard let newCGImage = context.makeImage() else { return nil }
+            
+            return UIImage(cgImage: newCGImage)
+        }
         func imageIsEmpty() -> Bool {
             guard let cgImage = self.cgImage else {
                 return true
@@ -203,7 +248,6 @@ extension UIImage {
     func maskWithColor(color: UIColor) -> UIImage? {
         let maskingColors: [CGFloat] = [1, 255, 1, 255, 1, 255]
         let bounds = CGRect(origin: .zero, size: size)
-        
         guard let maskImage = cgImage else{return nil}
         var returnImage: UIImage?
         
@@ -254,21 +298,19 @@ extension CIImage{
         if let matrixFilter = CIFilter(name: "CIColorMatrix") {
             matrixFilter.setDefaults()
             matrixFilter.setValue(self, forKey: kCIInputImageKey)
-            
             let rgbVector = CIVector(x: 0, y: 0, z: 0, w: 0)
-            let aVector = CIVector(x: -1, y: -1, z: -1, w: 1)
-            
+            let aVector = CIVector(x: 1, y: 1, z: 1, w: 0)
             matrixFilter.setValue(rgbVector, forKey: "inputRVector")
             matrixFilter.setValue(rgbVector, forKey: "inputGVector")
             matrixFilter.setValue(rgbVector, forKey: "inputBVector")
             matrixFilter.setValue(aVector, forKey: "inputAVector")
-            
             matrixFilter.setValue(CIVector(x: 1, y: 1, z: 1, w: 0), forKey: "inputBiasVector")
             
-            if let matrixOutput = matrixFilter.outputImage,
-               let cgImage = CIContext().createCGImage(matrixOutput, from: matrixOutput.extent) {
-                return UIImage(cgImage: cgImage)
+            if let matrixOutput = matrixFilter.outputImage, let cgImage = CIContext().createCGImage(matrixOutput, from: matrixOutput.extent) {
+                let finalImage = UIImage(cgImage: cgImage)
+                return finalImage
             }
+            
         }
         return UIImage()
     }

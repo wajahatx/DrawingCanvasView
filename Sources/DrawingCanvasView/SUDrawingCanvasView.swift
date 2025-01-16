@@ -19,18 +19,11 @@ public enum BrushType {
 public class CanvasController: ObservableObject {
     let canvasView: DrawingCanvasView
     
-    @Binding var currentMaskImage: UIImage?
     @Published public var isUndoEnabled = false
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
             didSet {
                 canvasView.setbrushSize(size: brushSize)
-            }
-        }
-        
-    @Published public var image: UIImage? {
-            didSet {
-                updateCanvasIfNeeded()
             }
         }
         
@@ -48,9 +41,7 @@ public class CanvasController: ObservableObject {
     
     public init() {
         self.canvasView = DrawingCanvasView(frame: .zero)
-        self._currentMaskImage = .constant(nil)
         self.brushSize = 30
-        self.image = nil
         self.brushColor = .black
         self.blendMode = .brush
         self.canvasView.delegate = self
@@ -68,10 +59,20 @@ public class CanvasController: ObservableObject {
         canvasView.clearCanvas()
     }
     
-    public func updateCanvasIfNeeded() {
-        if let newImage = image, newImage != currentMaskImage {
-            canvasView.setImage(image: newImage)
-        }
+    public func setImage(image: UIImage?) {
+        guard let image else { return }
+        canvasView.setImage(image: image)
+    }
+    
+    public func setMaskToImage(image: UIImage?) {
+        guard let image else { return }
+        canvasView.setMaskToImage(image: image)
+    }
+    public func getMask() -> UIImage? {
+        self.canvasView.currentMaskImage?.convertTransparentToBlackAndOpaqueToWhite()
+    }
+    public func getImage() -> UIImage? {
+        self.canvasView.currentMaskImage
     }
 }
 
@@ -97,9 +98,6 @@ public struct DrawingCanvas: UIViewRepresentable {
     }
     
     public func updateUIView(_ uiView: DrawingCanvasView, context: Context) {
-        Task { @MainActor in
-            controller.currentMaskImage = uiView.currentMaskImage
-            controller.updateCanvasIfNeeded()
-        }
+        
     }
 }
