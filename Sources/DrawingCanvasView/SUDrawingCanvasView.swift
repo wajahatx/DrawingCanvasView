@@ -7,91 +7,99 @@
 
 import Foundation
 import SwiftUI
-struct SUDrawingCanvasView: UIViewRepresentable {
-    @Binding var isUndoAvailable: Bool
-    @Binding var isRedoAvailable: Bool
-    @Binding var brushColor: UIColor
-    @Binding var brushType: BrushType
+
+
+public enum BrushType {
+    case brush
+    case eraser
+}
+
+
+@MainActor
+public class CanvasController: ObservableObject {
+    let canvasView: DrawingCanvasView
+    
     @Binding var currentMaskImage: UIImage?
-
-    enum BrushType {
-        case brush
-        case eraser
-    }
-
-    enum CanvasAction {
-        case undo
-        case redo
-        case clearCanvas
-    }
-
-    var actionHandler: ((CanvasAction) -> Void)?
-
-    class Coordinator: NSObject, @preconcurrency DrawingCanvasDelegate {
-        var parent: SUDrawingCanvasView
-        var canvasView: DrawingCanvasView?
-
-        init(parent: SUDrawingCanvasView) {
-            self.parent = parent
-        }
-
-        @MainActor func stateChangeForUndo(isAvailable: Bool) {
-                self.parent.isUndoAvailable = isAvailable
-            
-        }
-
-        @MainActor func stateChangeForRedo(isAvailable: Bool) {
-            
-                self.parent.isRedoAvailable = isAvailable
-            
-        }
-
-        @MainActor func updateBrushType(to brushType: BrushType) {
-            switch brushType {
-            case .brush:
-                canvasView?.brush()
-            case .eraser:
-                canvasView?.eraser()
+    @Published public var isUndoEnabled = false
+    @Published public var isRedoEnabled = false
+    @Published public var brushSize: Double {
+            didSet {
+                canvasView.setbrushSize(size: brushSize)
             }
         }
-
-        @MainActor func handleAction(_ action: CanvasAction) {
-            switch action {
-            case .undo:
-                canvasView?.undo()
-            case .redo:
-                canvasView?.redo()
-            case .clearCanvas:
-                canvasView?.clearCanvas()
+        
+    @Published public var image: UIImage? {
+            didSet {
+                updateCanvasIfNeeded()
             }
-            updateCurrentMaskImage()
         }
-
-        @MainActor func updateCurrentMaskImage() {
-            
-                self.parent.currentMaskImage = self.canvasView?.currentMaskImage
-            
+        
+    @Published public var brushColor: Color {
+            didSet {
+                canvasView.setBrushColor(color: UIColor(brushColor))
+            }
+        }
+        
+    @Published public var blendMode: BrushType {
+            didSet {
+                canvasView.setDrawing(blendMode: blendMode == .brush ? .copy : .clear)
+            }
+        }
+    
+    public init() {
+        self.canvasView = DrawingCanvasView(frame: .zero)
+        self._currentMaskImage = .constant(nil)
+        self.brushSize = 30
+        self.image = nil
+        self.brushColor = .black
+        self.blendMode = .brush
+        self.canvasView.delegate = self
+    }
+    
+    public func undo() {
+        canvasView.undo()
+    }
+    
+    public func redo() {
+        canvasView.redo()
+    }
+    
+    public func clearCanvas() {
+        canvasView.clearCanvas()
+    }
+    
+    public func updateCanvasIfNeeded() {
+        if let newImage = image, newImage != currentMaskImage {
+            canvasView.setImage(image: newImage)
         }
     }
+}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
+extension CanvasController: @preconcurrency DrawingCanvasDelegate {
+    public func stateChangeForUndo(isAvailable: Bool) {
+        isUndoEnabled = isAvailable
     }
-
-    func makeUIView(context: Context) -> DrawingCanvasView {
-        let canvasView = DrawingCanvasView()
-        canvasView.delegate = context.coordinator
-        canvasView.setBrushColor(color: brushColor)
-
-        // Save reference for the Coordinator
-        context.coordinator.canvasView = canvasView
-
-        return canvasView
+    
+    public func stateChangeForRedo(isAvailable: Bool) {
+        isRedoEnabled = isAvailable
     }
+}
 
-    func updateUIView(_ uiView: DrawingCanvasView, context: Context) {
-        uiView.setBrushColor(color: brushColor)
-        context.coordinator.updateBrushType(to: brushType)
-        context.coordinator.updateCurrentMaskImage()
+public struct DrawingCanvas: UIViewRepresentable {
+    @ObservedObject var controller: CanvasController
+    
+    public init(controller: CanvasController) {
+        self.controller = controller
+    }
+    
+    public func makeUIView(context: Context) -> DrawingCanvasView {
+        return controller.canvasView
+    }
+    
+    public func updateUIView(_ uiView: DrawingCanvasView, context: Context) {
+        Task { @MainActor in
+            controller.currentMaskImage = uiView.currentMaskImage
+            controller.updateCanvasIfNeeded()
+        }
     }
 }

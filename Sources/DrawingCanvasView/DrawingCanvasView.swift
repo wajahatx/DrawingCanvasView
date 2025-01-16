@@ -2,11 +2,11 @@
 // https://docs.swift.org/swift-book
 import Foundation
 import UIKit
-protocol DrawingCanvasDelegate: AnyObject {
+public protocol DrawingCanvasDelegate: AnyObject {
     func stateChangeForUndo(isAvailable: Bool)
     func stateChangeForRedo(isAvailable: Bool)
 }
-class DrawingCanvasView: UIView {
+public class DrawingCanvasView: UIView {
     
     weak var delegate: DrawingCanvasDelegate?
     private var brushColor: UIColor = UIColor.red.withAlphaComponent(0.3)
@@ -29,10 +29,10 @@ class DrawingCanvasView: UIView {
         }
     }
     
-    var isUndoEnabled = false
-    var isRedoEnabled = false
+    public var isUndoEnabled = false
+    public var isRedoEnabled = false
     
-    var currentMaskImage: UIImage? {
+    public var currentMaskImage: UIImage? {
         return imageView.image
     }
     
@@ -60,7 +60,7 @@ class DrawingCanvasView: UIView {
         self.isUserInteractionEnabled = true
     }
     
-    func setImage(image: UIImage) {
+    public func setImage(image: UIImage) {
         let ciImage = CIImage(cgImage: (image.cgImage)!)
         let filteredImage = ciImage.filteredImage()
         if let maskedImage = filteredImage.maskWithColor(color: brushColor)?.flipVertically(){
@@ -68,22 +68,25 @@ class DrawingCanvasView: UIView {
             refresh()
         }
     }
-    func setBrushColor(color: UIColor) {
+    public func setbrushSize(size: CGFloat) {
+        self.brushWidth = size
+    }
+    public func setBrushColor(color: UIColor) {
         self.brushColor = color
     }
     
-    func setDrawing(blendMode: CGBlendMode) {
+    public func setDrawing(blendMode: CGBlendMode) {
         self.blendMode = blendMode
     }
     
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         isDrawing = true
         if let touch = touches.first {
             lastPoint = touch.location(in: imageView)
         }
     }
     
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+    public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isDrawing {
             if let touch = touches.first {
                 let currentPoint = touch.location(in: imageView)
@@ -93,7 +96,7 @@ class DrawingCanvasView: UIView {
         }
     }
     
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         if isDrawing {
             if let touch = touches.first {
                 let currentPoint = touch.location(in: imageView)
@@ -139,29 +142,21 @@ class DrawingCanvasView: UIView {
         imageStack.append(currentImage)
     }
     
-    func undo() {
+    public func undo() {
         if !imageStack.isEmpty {
             redoStack.append(imageStack.removeLast())
             imageView.image = imageStack.last
         }
     }
     
-    func redo() {
+    public func redo() {
         if !redoStack.isEmpty {
             imageStack.append(redoStack.removeLast())
             imageView.image = imageStack.last
         }
     }
     
-    func eraser() {
-        blendMode = .clear
-    }
-    
-    func brush() {
-        blendMode = .copy
-    }
-    
-    func clearCanvas() {
+    public func clearCanvas() {
         imageView.image = nil
         imageStack.removeAll()
         redoStack.removeAll()
@@ -169,30 +164,41 @@ class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
-    func imageIsEmpty() -> Bool {
-        guard let cgImage = self.cgImage, let dataProvider = cgImage.dataProvider else {
-            return true
-        }
+    
+        func imageIsEmpty() -> Bool {
+            guard let cgImage = self.cgImage else {
+                return true
+            }
 
-        let pixelData = dataProvider.data
-        let data: UnsafePointer<UInt8> = CFDataGetBytePtr(pixelData)
-        let imageWidth = Int(self.size.width)
-        let imageHeight = Int(self.size.height)
-        for x in 0..<imageWidth {
-            for y in 0..<imageHeight {
-                let pixelIndex = ((imageWidth * y) + x) * 4
-                let r = data[pixelIndex]
-                let g = data[pixelIndex + 1]
-                let b = data[pixelIndex + 2]
-                let a = data[pixelIndex + 3]
-                if a != 0, r != 0 || g != 0 || b != 0 {
+            let width = cgImage.width
+            let height = cgImage.height
+            let bytesPerPixel = 4
+            let bytesPerRow = bytesPerPixel * width
+            let bitsPerComponent = 8
+
+            var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+
+            let colorSpace = CGColorSpaceCreateDeviceRGB()
+            let context = CGContext(data: &pixelData,
+                                    width: width,
+                                    height: height,
+                                    bitsPerComponent: bitsPerComponent,
+                                    bytesPerRow: bytesPerRow,
+                                    space: colorSpace,
+                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+
+            context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+            // Check for any non-transparent pixel
+            for pixel in stride(from: 3, to: pixelData.count, by: bytesPerPixel) {
+                if pixelData[pixel] > 0 {
                     return false
                 }
             }
-        }
 
-        return true
-    }
+            return true
+        }
+    
    
     func maskWithColor(color: UIColor) -> UIImage? {
         let maskingColors: [CGFloat] = [1, 255, 1, 255, 1, 255]
