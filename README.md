@@ -23,13 +23,7 @@ struct ContentView: View {
     
     var body: some View {
         VStack {
-            Image(.source)
-                .resizable()
-                .scaledToFit()
-                .overlay {
-                    DrawingCanvas(controller: canvasController)
-                }
-            
+            DrawingCanvas(controller: canvasController)
             HStack {
                 Button("Undo") {
                     canvasController.undo()
