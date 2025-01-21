@@ -181,72 +181,127 @@ public class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
-    func convertTransparentToBlackAndOpaqueToWhite() -> UIImage? {
-            guard let cgImage = self.cgImage else { return nil }
+    func convertTransparentToBlackAndOpaqueToWhite(completion: @escaping (UIImage?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            guard let cgImage = self.cgImage else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
             
             let width = cgImage.width
             let height = cgImage.height
-            let colorSpace = CGColorSpaceCreateDeviceGray()
             
-            // Create a bitmap context with only alpha channel (1 bit per pixel)
-            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return nil }
+            // Create a color space and context for the new image (RGBA)
+            guard let colorSpace = cgImage.colorSpace else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
             
-            // Draw the image in the context
+            guard let context = CGContext(data: nil,
+                                          width: width,
+                                          height: height,
+                                          bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, // 4 bytes per pixel (RGBA)
+                                          space: colorSpace,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
+            
+            // Draw the original image into the context
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
             
             // Get the pixel data from the context
-            guard let data = context.data else { return nil }
+            guard let pixelData = context.data else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
             
-            // Convert the pixel data
-            let pixelBuffer = data.bindMemory(to: UInt8.self, capacity: width * height)
+            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: width * height * 4)
+            
+            // Iterate through each pixel
             for y in 0..<height {
                 for x in 0..<width {
-                    let pixelIndex = y * width + x
-                    let alphaValue = pixelBuffer[pixelIndex]
-                    pixelBuffer[pixelIndex] = alphaValue > 0 ? 255 : 0
+                    let pixelIndex = (y * width + x) * 4
+                    
+                    let alpha = pixels[pixelIndex + 3]
+                    
+                    // If the pixel is transparent (alpha == 0), set it to black (RGB 0, 0, 0)
+                    // If the pixel is opaque (alpha > 0), set it to white (RGB 255, 255, 255)
+                    if alpha == 0 {
+                        pixels[pixelIndex] = 0     // Red
+                        pixels[pixelIndex + 1] = 0 // Green
+                        pixels[pixelIndex + 2] = 0 // Blue
+                        pixels[pixelIndex + 3] = 255 // Alpha (fully opaque black)
+                    } else {
+                        pixels[pixelIndex] = 255   // Red
+                        pixels[pixelIndex + 1] = 255 // Green
+                        pixels[pixelIndex + 2] = 255 // Blue
+                        pixels[pixelIndex + 3] = 255 // Alpha (fully opaque white)
+                    }
                 }
             }
             
-            // Create a new image from the pixel data
-            guard let newCGImage = context.makeImage() else { return nil }
+            // Create a new CGImage from the modified pixel data
+            guard let newCGImage = context.makeImage() else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
+            }
             
-            return UIImage(cgImage: newCGImage)
+            // Return the new UIImage on the main thread
+            DispatchQueue.main.async {
+                completion(UIImage(cgImage: newCGImage))
+            }
         }
-        func imageIsEmpty() -> Bool {
-            guard let cgImage = self.cgImage else {
-                return true
-            }
-
-            let width = cgImage.width
-            let height = cgImage.height
-            let bytesPerPixel = 4
-            let bytesPerRow = bytesPerPixel * width
-            let bitsPerComponent = 8
-
-            var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-
-            let colorSpace = CGColorSpaceCreateDeviceRGB()
-            let context = CGContext(data: &pixelData,
-                                    width: width,
-                                    height: height,
-                                    bitsPerComponent: bitsPerComponent,
-                                    bytesPerRow: bytesPerRow,
-                                    space: colorSpace,
-                                    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-
-            context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-            // Check for any non-transparent pixel
-            for pixel in stride(from: 3, to: pixelData.count, by: bytesPerPixel) {
-                if pixelData[pixel] > 0 {
-                    return false
-                }
-            }
-
+    }
+    
+    
+    
+    func imageIsEmpty() -> Bool {
+        guard let cgImage = self.cgImage else {
             return true
         }
+        
+        let width = cgImage.width
+        let height = cgImage.height
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * width
+        let bitsPerComponent = 8
+        
+        var pixelData = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
+        
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(data: &pixelData,
+                                width: width,
+                                height: height,
+                                bitsPerComponent: bitsPerComponent,
+                                bytesPerRow: bytesPerRow,
+                                space: colorSpace,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        
+        context?.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        
+        // Check for any non-transparent pixel
+        for pixel in stride(from: 3, to: pixelData.count, by: bytesPerPixel) {
+            if pixelData[pixel] > 0 {
+                return false
+            }
+        }
+        
+        return true
+    }
     
-   
+    
     func maskWithColor(color: UIColor) -> UIImage? {
         let maskingColors: [CGFloat] = [1, 255, 1, 255, 1, 255]
         let bounds = CGRect(origin: .zero, size: size)
