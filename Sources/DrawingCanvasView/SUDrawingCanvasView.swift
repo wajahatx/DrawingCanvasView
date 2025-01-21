@@ -70,8 +70,9 @@ public class CanvasController: ObservableObject {
         canvasView.setMaskToImage(image: image)
         adjustCanvasSizeToAspectRatio(for: image)
     }
-    public func getMask() -> UIImage? {
-        self.canvasView.currentMaskImage?.convertTransparentToBlackAndOpaqueToWhite()
+    public func getMask(completion: @escaping (UIImage?) -> Void){
+        self.canvasView.currentMaskImage?.convertTransparentToBlackAndOpaqueToWhite(completion: completion)
+        
     }
     public func getImage() -> UIImage? {
         self.canvasView.currentMaskImage
