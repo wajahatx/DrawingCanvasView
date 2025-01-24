@@ -19,6 +19,8 @@ public class DrawingCanvasView: UIView {
     
     private var mainImage: UIImage?
     
+    private let maxUndoRedoStackSize = 5
+    
     private var undoStack: [UIImage] = [] {
         didSet {
             delegate?.stateChangeForUndo(isAvailable: !undoStack.isEmpty)
@@ -90,7 +92,11 @@ public class DrawingCanvasView: UIView {
         guard !undoStack.isEmpty else { return }
         
         if let lastImage = undoStack.popLast() {
-            redoStack.append(mainImage?.compress(quality: 0.5) ?? UIImage())
+            redoStack.append(mainImage ?? UIImage())
+            if redoStack.count > maxUndoRedoStackSize {
+                redoStack.removeFirst()
+            }
+            
             mainImage = lastImage
             updateCanvas()
         }
@@ -100,7 +106,11 @@ public class DrawingCanvasView: UIView {
         guard !redoStack.isEmpty else { return }
         
         if let redoImage = redoStack.popLast() {
-            undoStack.append(mainImage?.compress(quality: 0.5) ?? UIImage())
+            undoStack.append(mainImage ?? UIImage())
+            if undoStack.count > maxUndoRedoStackSize {
+                undoStack.removeFirst()
+            }
+            
             mainImage = redoImage
             updateCanvas()
         }
@@ -129,8 +139,11 @@ public class DrawingCanvasView: UIView {
         lastPoint = touch.location(in: self)
         
         // Push the current image state onto the undo stack before drawing
-        if let currentImage = mainImage?.compress(quality: 0.5) {
+        if let currentImage = mainImage {
             undoStack.append(currentImage)
+            if undoStack.count > maxUndoRedoStackSize {
+                undoStack.removeFirst()  // Remove oldest image to maintain the limit
+            }
         } else {
             undoStack.append(UIImage())
         }
@@ -184,15 +197,6 @@ public class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
-    func compress(quality: CGFloat) -> UIImage? {
-           let validQuality = max(0.0, min(quality, 1.0))
-           
-           guard let compressedData = self.jpegData(compressionQuality: validQuality) else {
-               return nil
-           }
-           
-           return UIImage(data: compressedData)
-       }
     func convertTransparentToBlackAndOpaqueToWhite(completion: @escaping (UIImage?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let cgImage = self.cgImage else {
