@@ -19,7 +19,7 @@ public class DrawingCanvasView: UIView {
     
     private var mainImage: UIImage?
     
-    private let maxUndoRedoStackSize = 5  // Limit of 10 items in the stack
+    private let maxUndoRedoStackSize = 5
     
     private var undoStack: [UIImage] = [] {
         didSet {
