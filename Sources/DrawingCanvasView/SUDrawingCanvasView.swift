@@ -23,7 +23,7 @@ public class CanvasController: ObservableObject {
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
             didSet {
-                canvasView.setbrushSize(size: brushSize)
+                canvasView.setBrushSize(size: brushSize)
             }
         }
         
