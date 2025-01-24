@@ -8,179 +8,191 @@ public protocol DrawingCanvasDelegate: AnyObject {
 }
 public class DrawingCanvasView: UIView {
     
+    // MARK: - Properties
     weak var delegate: DrawingCanvasDelegate?
     private var brushColor: UIColor = UIColor.red.withAlphaComponent(0.3)
-    private var imageView: UIImageView! = UIImageView()
-    private var blendMode: CGBlendMode = .copy
-    private var lastPoint: CGPoint!
     private var brushWidth: CGFloat = 20.0
+    private var blendMode: CGBlendMode = .copy
+    
+    private var lastPoint: CGPoint = .zero
     private var isDrawing = false
     
-    private var imageStack: [UIImage] = [] {
+    private var mainImage: UIImage?
+    
+    private var undoStack: [UIImage] = [] {
         didSet {
-            delegate?.stateChangeForUndo(isAvailable: !imageStack.isEmpty)
-            isUndoEnabled = !imageStack.isEmpty
+            delegate?.stateChangeForUndo(isAvailable: !undoStack.isEmpty)
         }
     }
     private var redoStack: [UIImage] = [] {
         didSet {
             delegate?.stateChangeForRedo(isAvailable: !redoStack.isEmpty)
-            isRedoEnabled = !redoStack.isEmpty
         }
     }
     
-    public var isUndoEnabled = false
-    public var isRedoEnabled = false
-    
-    public var currentMaskImage: UIImage? {
-        return imageView.image
-    }
-    
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        setupImageView()
-    }
-    
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        setupImageView()
-    }
-    
-    private func setupImageView() {
-        imageView.image = UIImage()
-        imageView.translatesAutoresizingMaskIntoConstraints = false
+    private lazy var imageView: UIImageView = {
+        let imageView = UIImageView()
         imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
         self.addSubview(imageView)
-        
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: self.topAnchor),
             imageView.leadingAnchor.constraint(equalTo: self.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: self.trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: self.bottomAnchor)
         ])
-        self.isUserInteractionEnabled = true
+        return imageView
+    }()
+    
+    // MARK: - Public API
+    public var currentMaskImage: UIImage? {
+        return mainImage
+    }
+    
+    public var isUndoEnabled: Bool {
+        return !undoStack.isEmpty
+    }
+    
+    public var isRedoEnabled: Bool {
+        return !redoStack.isEmpty
     }
     
     public func setImage(image: UIImage) {
-            imageView.image = image
-            refresh()
+        mainImage = image
+        undoStack.removeAll()
+        redoStack.removeAll()
+        updateCanvas()
     }
+    
     public func setMaskToImage(image: UIImage) {
         let ciImage = CIImage(cgImage: (image.cgImage)!)
         let filteredImage = ciImage.filteredImage()
         if let maskedImage = filteredImage.maskWithColor(color: brushColor)?.flipVertically(){
-            imageView.image = maskedImage
-            imageStack.append(maskedImage)
+            setImage(image: maskedImage)
         }
+        
     }
-    public func setbrushSize(size: CGFloat) {
-        self.brushWidth = size
+    
+    public func setBrushSize(size: CGFloat) {
+        brushWidth = size
     }
+    
     public func setBrushColor(color: UIColor) {
-        self.brushColor = color
+        brushColor = color
     }
     
     public func setDrawing(blendMode: CGBlendMode) {
         self.blendMode = blendMode
     }
     
-    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        isDrawing = true
-        if let touch = touches.first {
-            lastPoint = touch.location(in: imageView)
-        }
-    }
-    
-    public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if isDrawing {
-            if let touch = touches.first {
-                let currentPoint = touch.location(in: imageView)
-                drawLineFrom(lastPoint, toPoint: currentPoint)
-                lastPoint = currentPoint
-            }
-        }
-    }
-    
-    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if isDrawing {
-            if let touch = touches.first {
-                let currentPoint = touch.location(in: imageView)
-                drawLineFrom(lastPoint, toPoint: currentPoint)
-                lastPoint = currentPoint
-            }
-            isDrawing = false
-            if let image = imageView.image, !image.imageIsEmpty() {
-                imageStack.append(image)
-                redoStack.removeAll()
-            }
-        }
-    }
-    
-
-    private func drawLineFrom(_ fromPoint: CGPoint, toPoint: CGPoint) {
-        var originalImage = imageView.image ?? UIImage()
-        var size = originalImage.size == .zero ? CGSize(width: imageView.frame.width, height: imageView.frame.height) : originalImage.size
-        guard size != .zero else { return }
-
-        let scaleX = size.width / imageView.frame.size.width
-        let scaleY = size.height / imageView.frame.size.height
-
-        let scaledFromPoint = CGPoint(x: fromPoint.x * scaleX, y: fromPoint.y * scaleY)
-        let scaledToPoint = CGPoint(x: toPoint.x * scaleX, y: toPoint.y * scaleY)
-
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { context in
-            
-            originalImage.draw(at: .zero)
-            
-            context.cgContext.move(to: scaledFromPoint)
-            context.cgContext.addLine(to: scaledToPoint)
-            context.cgContext.setLineCap(.round)
-            context.cgContext.setLineWidth(brushWidth * scaleX)
-            context.cgContext.setStrokeColor(brushColor.cgColor)
-            context.cgContext.setBlendMode(blendMode)
-            context.cgContext.strokePath()
-        }
-        imageView.image = image
-    }
-    
-    private func refresh() {
-        guard imageView.frame.size != .zero else { return }
-        let renderer = UIGraphicsImageRenderer(size: imageView.frame.size)
-        let currentImage = renderer.image { context in
-            imageView.image?.draw(in: imageView.bounds)
-            context.cgContext.setLineCap(.round)
-            context.cgContext.setLineWidth(0.1)
-            context.cgContext.setStrokeColor(brushColor.cgColor)
-            context.cgContext.setBlendMode(blendMode)
-            context.cgContext.strokePath()
-        }
-        imageView.image = currentImage
-        imageStack.append(currentImage)
-    }
     
     public func undo() {
-        if !imageStack.isEmpty {
-            redoStack.append(imageStack.removeLast())
-            imageView.image = imageStack.last
+        guard !undoStack.isEmpty else { return }
+        
+        if let lastImage = undoStack.popLast() {
+            redoStack.append(mainImage?.compress(quality: 0.5) ?? UIImage())
+            mainImage = lastImage
+            updateCanvas()
         }
     }
     
     public func redo() {
-        if !redoStack.isEmpty {
-            imageStack.append(redoStack.removeLast())
-            imageView.image = imageStack.last
+        guard !redoStack.isEmpty else { return }
+        
+        if let redoImage = redoStack.popLast() {
+            undoStack.append(mainImage?.compress(quality: 0.5) ?? UIImage())
+            mainImage = redoImage
+            updateCanvas()
         }
     }
     
     public func clearCanvas() {
-        imageView.image = nil
-        imageStack.removeAll()
+        mainImage = nil
+        undoStack.removeAll()
         redoStack.removeAll()
+        updateCanvas()
+    }
+    
+    // MARK: - Initializers
+    public override init(frame: CGRect) {
+        super.init(frame: frame)
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+    }
+    
+    // MARK: - Touch Handling
+    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        isDrawing = true
+        guard let touch = touches.first else { return }
+        lastPoint = touch.location(in: self)
+        
+        // Push the current image state onto the undo stack before drawing
+        if let currentImage = mainImage?.compress(quality: 0.5) {
+            undoStack.append(currentImage)
+        } else {
+            undoStack.append(UIImage())
+        }
+        
+        // Clear the redo stack because new drawing invalidates redo history
+        redoStack.removeAll()
+    }
+    
+    public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let currentPoint = touch.location(in: self)
+        drawLine(from: lastPoint, to: currentPoint)
+        lastPoint = currentPoint
+    }
+    
+    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        let currentPoint = touch.location(in: self)
+        drawLine(from: lastPoint, to: currentPoint)
+        lastPoint = .zero
+    }
+    
+    // MARK: - Drawing Logic
+    private func drawLine(from startPoint: CGPoint, to endPoint: CGPoint) {
+        let size = bounds.size
+        let renderer = UIGraphicsImageRenderer(size: size)
+        
+        let image = renderer.image { context in
+            // Draw the main image
+            mainImage?.draw(in: bounds)
+            
+            // Configure the drawing context
+            context.cgContext.setLineCap(.round)
+            context.cgContext.setLineWidth(brushWidth)
+            context.cgContext.setStrokeColor(brushColor.cgColor)
+            context.cgContext.setBlendMode(blendMode)
+            
+            // Draw the line
+            context.cgContext.move(to: startPoint)
+            context.cgContext.addLine(to: endPoint)
+            context.cgContext.strokePath()
+        }
+        
+        mainImage = image
+        updateCanvas()
+    }
+    
+    private func updateCanvas() {
+        imageView.image = mainImage
     }
 }
 
 extension UIImage {
+    func compress(quality: CGFloat) -> UIImage? {
+           let validQuality = max(0.0, min(quality, 1.0))
+           
+           guard let compressedData = self.jpegData(compressionQuality: validQuality) else {
+               return nil
+           }
+           
+           return UIImage(data: compressedData)
+       }
     func convertTransparentToBlackAndOpaqueToWhite(completion: @escaping (UIImage?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let cgImage = self.cgImage else {
