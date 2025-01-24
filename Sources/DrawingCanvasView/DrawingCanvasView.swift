@@ -19,7 +19,7 @@ public class DrawingCanvasView: UIView {
     
     private var mainImage: UIImage?
     
-    private let maxUndoRedoStackSize = 5
+    private var maxUndoRedoStackSize = 5
     
     private var undoStack: [UIImage] = [] {
         didSet {
@@ -75,6 +75,9 @@ public class DrawingCanvasView: UIView {
         
     }
     
+    public func setMaxThresholdForStack(numberOfImages number: Int){
+        self.maxUndoRedoStackSize = number
+    }
     public func setBrushSize(size: CGFloat) {
         brushWidth = size
     }

@@ -59,6 +59,10 @@ public class CanvasController: ObservableObject {
         canvasView.clearCanvas()
     }
     
+    public func setMaxThreshold(numberOfImages number: Int){
+        canvasView.setMaxThresholdForStack(numberOfImages: number)
+    }
+    
     public func setImage(image: UIImage?) {
         guard let image else { return }
         canvasView.setImage(image: image)
