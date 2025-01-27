@@ -200,23 +200,19 @@ public class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
+    @MainActor
     func convertTransparentToBlackAndOpaqueToWhite(completion: @escaping (UIImage?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
             guard let cgImage = self.cgImage else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                Task { @MainActor in completion(nil) }
                 return
             }
             
             let width = cgImage.width
             let height = cgImage.height
             
-            // Create a color space and context for the new image (RGBA)
             guard let colorSpace = cgImage.colorSpace else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                Task { @MainActor in completion(nil) }
                 return
             }
             
@@ -224,66 +220,54 @@ extension UIImage {
                                           width: width,
                                           height: height,
                                           bitsPerComponent: 8,
-                                          bytesPerRow: width * 4, // 4 bytes per pixel (RGBA)
+                                          bytesPerRow: width * 4,
                                           space: colorSpace,
                                           bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                Task { @MainActor in completion(nil) }
                 return
             }
             
-            // Draw the original image into the context
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
             
-            // Get the pixel data from the context
             guard let pixelData = context.data else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                Task { @MainActor in completion(nil) }
                 return
             }
             
             let pixels = pixelData.bindMemory(to: UInt8.self, capacity: width * height * 4)
             
-            // Iterate through each pixel
             for y in 0..<height {
                 for x in 0..<width {
                     let pixelIndex = (y * width + x) * 4
-                    
                     let alpha = pixels[pixelIndex + 3]
                     
-                    // If the pixel is transparent (alpha == 0), set it to black (RGB 0, 0, 0)
-                    // If the pixel is opaque (alpha > 0), set it to white (RGB 255, 255, 255)
                     if alpha == 0 {
                         pixels[pixelIndex] = 0     // Red
                         pixels[pixelIndex + 1] = 0 // Green
                         pixels[pixelIndex + 2] = 0 // Blue
-                        pixels[pixelIndex + 3] = 255 // Alpha (fully opaque black)
+                        pixels[pixelIndex + 3] = 255 // Alpha
                     } else {
                         pixels[pixelIndex] = 255   // Red
                         pixels[pixelIndex + 1] = 255 // Green
                         pixels[pixelIndex + 2] = 255 // Blue
-                        pixels[pixelIndex + 3] = 255 // Alpha (fully opaque white)
+                        pixels[pixelIndex + 3] = 255 // Alpha
                     }
                 }
             }
             
-            // Create a new CGImage from the modified pixel data
             guard let newCGImage = context.makeImage() else {
-                DispatchQueue.main.async {
-                    completion(nil)
-                }
+                Task { @MainActor in completion(nil) }
                 return
             }
             
-            // Return the new UIImage on the main thread
-            DispatchQueue.main.async {
-                completion(UIImage(cgImage: newCGImage))
+            let resultImage = UIImage(cgImage: newCGImage)
+            
+            Task { @MainActor in
+                completion(resultImage)
             }
         }
     }
-    
+
     
     
     func imageIsEmpty() -> Bool {
