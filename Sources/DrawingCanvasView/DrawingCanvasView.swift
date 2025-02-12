@@ -207,64 +207,45 @@ extension UIImage {
                 Task { @MainActor in completion(nil) }
                 return
             }
-            
+
             let width = cgImage.width
             let height = cgImage.height
-            
-            guard let colorSpace = cgImage.colorSpace else {
+            let colorSpace = CGColorSpaceCreateDeviceGray()
+
+            // Create a bitmap context with only alpha channel (1 bit per pixel)
+            guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width, space: colorSpace, bitmapInfo: CGImageAlphaInfo.none.rawValue) else {
                 Task { @MainActor in completion(nil) }
                 return
             }
-            
-            guard let context = CGContext(data: nil,
-                                          width: width,
-                                          height: height,
-                                          bitsPerComponent: 8,
-                                          bytesPerRow: width * 4,
-                                          space: colorSpace,
-                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-                Task { @MainActor in completion(nil) }
-                return
-            }
-            
+
+            // Draw the image in the context
             context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-            
-            guard let pixelData = context.data else {
+
+            // Get the pixel data from the context
+            guard let data = context.data else {
                 Task { @MainActor in completion(nil) }
                 return
             }
-            
-            let pixels = pixelData.bindMemory(to: UInt8.self, capacity: width * height * 4)
-            
+
+            // Convert the pixel data
+            let pixelBuffer = data.bindMemory(to: UInt8.self, capacity: width * height)
             for y in 0..<height {
                 for x in 0..<width {
-                    let pixelIndex = (y * width + x) * 4
-                    let alpha = pixels[pixelIndex + 3]
-                    
-                    if alpha == 0 {
-                        pixels[pixelIndex] = 0     // Red
-                        pixels[pixelIndex + 1] = 0 // Green
-                        pixels[pixelIndex + 2] = 0 // Blue
-                        pixels[pixelIndex + 3] = 255 // Alpha
-                    } else {
-                        pixels[pixelIndex] = 255   // Red
-                        pixels[pixelIndex + 1] = 255 // Green
-                        pixels[pixelIndex + 2] = 255 // Blue
-                        pixels[pixelIndex + 3] = 255 // Alpha
-                    }
+                    let pixelIndex = y * width + x
+                    let alphaValue = pixelBuffer[pixelIndex]
+                    pixelBuffer[pixelIndex] = alphaValue > 0 ? 255 : 0
                 }
             }
-            
+
+            // Create a new image from the pixel data
             guard let newCGImage = context.makeImage() else {
                 Task { @MainActor in completion(nil) }
                 return
             }
-            
+
             let resultImage = UIImage(cgImage: newCGImage)
-            
-            Task { @MainActor in
-                completion(resultImage)
-            }
+
+            Task { @MainActor in completion(resultImage) }
         }
     }
 
