@@ -70,7 +70,7 @@ public class CanvasController: ObservableObject {
     }
     
     public func setMaskToImage(image: UIImage?) {
-        guard let image else { return }
+        guard let image = image?.resizeWithAspectRatio(to: CGSize(width: 512, height: 512)) else { return }
         canvasView.setMaskToImage(image: image)
         adjustCanvasSizeToAspectRatio(for: image)
     }
