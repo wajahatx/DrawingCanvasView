@@ -69,8 +69,11 @@ public class DrawingCanvasView: UIView {
     public func setMaskToImage(image: UIImage) {
         let ciImage = CIImage(cgImage: (image.cgImage)!)
         let filteredImage = ciImage.filteredImage()
-        if let maskedImage = filteredImage.maskWithColor(color: brushColor)?.flipVertically(){
-            setImage(image: maskedImage)
+        filteredImage.maskWithColor(color: brushColor) {[weak self] image in
+            guard let maskImage = image?.flipVertically()else{
+                return
+            }
+            self?.setImage(image: maskImage)
         }
         
     }
@@ -200,6 +203,28 @@ public class DrawingCanvasView: UIView {
 }
 
 extension UIImage {
+    func resizeWithAspectRatio(to targetSize: CGSize) -> UIImage? {
+        let widthRatio = targetSize.width / size.width
+        let heightRatio = targetSize.height / size.height
+        
+        var newSize: CGSize
+        if widthRatio > heightRatio {
+            newSize = CGSize(width: size.width * heightRatio, height: size.height * heightRatio)
+        } else {
+            newSize = CGSize(width: size.width * widthRatio,  height: size.height * widthRatio)
+        }
+        
+        return resized(to: newSize)
+    }
+    func resized(to size: CGSize) -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: size))
+        }
+    }
+
     @MainActor
     func convertTransparentToBlackAndOpaqueToWhite(completion: @escaping (UIImage?) -> Void) {
         DispatchQueue.global(qos: .userInitiated).async {
@@ -248,10 +273,11 @@ extension UIImage {
             Task { @MainActor in completion(resultImage) }
         }
     }
+   
 
     
     
-    func imageIsEmpty() -> Bool {
+    func imageIsEmpty() -> Bool{
         guard let cgImage = self.cgImage else {
             return true
         }
@@ -284,39 +310,51 @@ extension UIImage {
         
         return true
     }
-    
-    
-    func maskWithColor(color: UIColor) -> UIImage? {
-        let maskingColors: [CGFloat] = [1, 255, 1, 255, 1, 255]
-        let bounds = CGRect(origin: .zero, size: size)
-        guard let maskImage = cgImage else{return nil}
-        var returnImage: UIImage?
-        
-        // make sure image has no alpha channel
-        let rFormat = UIGraphicsImageRendererFormat()
-        rFormat.opaque = true
-        let size = size
-        UIGraphicsBeginImageContextWithOptions(size, true, 0.0)
-        draw(in: CGRect(origin: CGPoint.zero, size: size))
-        let noAlphaImage = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        let noAlphaCGRef = noAlphaImage?.cgImage
-        
-        if let imgRefCopy = noAlphaCGRef?.copy(maskingColorComponents: maskingColors) {
-            
-            let rFormat = UIGraphicsImageRendererFormat()
-            rFormat.opaque = false
-            let renderer = UIGraphicsImageRenderer(size: size, format: rFormat)
-            returnImage = renderer.image {
-                (context) in
-                context.cgContext.clip(to: bounds, mask: maskImage)
-                context.cgContext.setFillColor(color.cgColor)
-                context.cgContext.fill(bounds)
-                context.cgContext.draw(imgRefCopy, in: bounds)
+    func maskWithColor(color: UIColor, completion: @escaping (UIImage?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let maskingColors: [CGFloat] = [1, 255, 1, 255, 1, 255]
+            let bounds = CGRect(origin: .zero, size: self.size)
+            guard let maskImage = self.cgImage else {
+                DispatchQueue.main.async {
+                    completion(nil)
+                }
+                return
             }
             
+            var returnImage: UIImage?
+            
+            // make sure image has no alpha channel
+            let rFormat = UIGraphicsImageRendererFormat()
+            rFormat.opaque = true
+            let size = self.size
+            
+            // Create context in main thread since UIKit is not thread safe
+            DispatchQueue.main.sync {
+                UIGraphicsBeginImageContextWithOptions(size, true, 0.0)
+                self.draw(in: CGRect(origin: CGPoint.zero, size: size))
+                let noAlphaImage = UIGraphicsGetImageFromCurrentImageContext()
+                UIGraphicsEndImageContext()
+                
+                let noAlphaCGRef = noAlphaImage?.cgImage
+                
+                if let imgRefCopy = noAlphaCGRef?.copy(maskingColorComponents: maskingColors) {
+                    let rFormat = UIGraphicsImageRendererFormat()
+                    rFormat.opaque = false
+                    let renderer = UIGraphicsImageRenderer(size: size, format: rFormat)
+                    returnImage = renderer.image { (context) in
+                        context.cgContext.clip(to: bounds, mask: maskImage)
+                        context.cgContext.setFillColor(color.cgColor)
+                        context.cgContext.fill(bounds)
+                        context.cgContext.draw(imgRefCopy, in: bounds)
+                    }
+                }
+            }
+            
+            // Return result on main thread
+            DispatchQueue.main.async {
+                completion(returnImage)
+            }
         }
-        return returnImage
     }
     func flipVertically() -> UIImage? {
         UIGraphicsBeginImageContextWithOptions(self.size, false, self.scale)
