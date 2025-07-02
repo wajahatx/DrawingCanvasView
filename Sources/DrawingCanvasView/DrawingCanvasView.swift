@@ -10,6 +10,12 @@ public protocol DrawingCanvasDelegate: AnyObject {
 }
 public class DrawingCanvasView: UIView {
     
+    // Touch delay properties
+    private let touchDelayInterval: TimeInterval = 0.1
+    private var touchStartTime: Date?
+    private var pendingDrawingPoints: [(from: CGPoint, to: CGPoint)] = []
+    private var drawingTimer: Timer?
+    private var touchCancelled = false
     // MARK: - Properties
     weak var delegate: DrawingCanvasDelegate?
     private var brushColor: UIColor = UIColor.red.withAlphaComponent(0.3)
@@ -147,6 +153,12 @@ public class DrawingCanvasView: UIView {
             return
         }
         guard let touch = touches.first else { return }
+        
+        touchStartTime = Date()
+        touchCancelled = false
+        pendingDrawingPoints.removeAll()
+        drawingTimer?.invalidate()
+        
         lastPoint = touch.location(in: self)
         
         // Push the current image state onto the undo stack before drawing
@@ -164,21 +176,87 @@ public class DrawingCanvasView: UIView {
     }
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         print("drawingcanvas, Touch cancelled, \(touches.count)")
+        touchCancelled = true
         
+        // Cancel any pending drawing
+        drawingTimer?.invalidate()
+        pendingDrawingPoints.removeAll()
+        
+        // If touch was cancelled within the delay period, restore the previous state
+        if let startTime = touchStartTime, Date().timeIntervalSince(startTime) <= touchDelayInterval {
+            // Restore previous image state
+            if !undoStack.isEmpty {
+                mainImage = undoStack.removeLast()
+                updateCanvas()
+            }
+        }
+        
+        touchStartTime = nil
     }
     
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         print("drawingcanvas, Touch moved, \(touches.count)")
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
-        drawLine(from: lastPoint, to: currentPoint)
+//        drawLine(from: lastPoint, to: currentPoint)
+        
+        guard let startTime = touchStartTime else { return }
+                let elapsedTime = Date().timeIntervalSince(startTime)
+                
+                if elapsedTime >= touchDelayInterval {
+                    // Delay period has passed, draw immediately
+                    drawLine(from: lastPoint, to: currentPoint)
+                    // Also draw any pending points
+                    if !pendingDrawingPoints.isEmpty {
+                        for pendingPoint in pendingDrawingPoints {
+                            drawLine(from: pendingPoint.from, to: pendingPoint.to)
+                        }
+                        pendingDrawingPoints.removeAll()
+                    }
+                } else {
+                    // Still within delay period, queue the drawing
+                    pendingDrawingPoints.append((from: lastPoint, to: currentPoint))
+                    
+                    // Set up timer to execute pending drawings after delay
+                    drawingTimer?.invalidate()
+                    let remainingDelay = touchDelayInterval - elapsedTime
+                    drawingTimer = Timer.scheduledTimer(withTimeInterval: remainingDelay, repeats: false) { [weak self] _ in
+                        Task { @MainActor in
+                            guard let self = self, !self.touchCancelled else { return }
+                            
+                            // Execute all pending drawings
+                            for pendingPoint in self.pendingDrawingPoints {
+                                self.drawLine(from: pendingPoint.from, to: pendingPoint.to)
+                            }
+                            self.pendingDrawingPoints.removeAll()
+                        }
+                    }
+                }
         lastPoint = currentPoint
     }
     
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
-        drawLine(from: lastPoint, to: currentPoint)
+//        drawLine(from: lastPoint, to: currentPoint)
+        guard let startTime = touchStartTime else { return }
+                let elapsedTime = Date().timeIntervalSince(startTime)
+                
+                if elapsedTime >= touchDelayInterval {
+                    // Delay period has passed, draw the final line
+                    drawLine(from: lastPoint, to: currentPoint)
+                } else {
+                    // Still within delay period, add to pending and execute all
+                    pendingDrawingPoints.append((from: lastPoint, to: currentPoint))
+                    
+                    // Execute all pending drawings immediately since touch ended
+                    for pendingPoint in pendingDrawingPoints {
+                        drawLine(from: pendingPoint.from, to: pendingPoint.to)
+                    }
+                }
+        drawingTimer?.invalidate()
+        pendingDrawingPoints.removeAll()
+        touchStartTime = nil
         lastPoint = .zero
         print("drawingcanvas, Touch ended, \(touches.count)")
         self.delegate?.didFinishDrawing()
