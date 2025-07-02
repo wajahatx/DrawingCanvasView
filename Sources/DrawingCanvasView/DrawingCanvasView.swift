@@ -167,11 +167,11 @@ public class DrawingCanvasView: UIView {
     }
     
     public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.delegate?.didFinishDrawing()
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
         lastPoint = .zero
+        self.delegate?.didFinishDrawing()
     }
     
     // MARK: - Drawing Logic
