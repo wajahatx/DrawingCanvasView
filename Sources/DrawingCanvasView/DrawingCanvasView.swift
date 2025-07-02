@@ -142,6 +142,10 @@ public class DrawingCanvasView: UIView {
     // MARK: - Touch Handling
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         self.delegate?.didStartedDrawing()
+        guard touches.count == 1 else {
+            print("Two fingers detected - preventing drawing")
+            return
+        }
         guard let touch = touches.first else { return }
         lastPoint = touch.location(in: self)
         
