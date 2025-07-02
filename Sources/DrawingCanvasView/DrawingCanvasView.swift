@@ -164,6 +164,7 @@ public class DrawingCanvasView: UIView {
     }
     
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        print("drawingcanvas, Touch moved")
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
@@ -175,6 +176,7 @@ public class DrawingCanvasView: UIView {
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
         lastPoint = .zero
+        print("drawingcanvas, Touch ended")
         self.delegate?.didFinishDrawing()
     }
     
