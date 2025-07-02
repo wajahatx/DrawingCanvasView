@@ -18,7 +18,8 @@ public enum BrushType {
 @MainActor
 public class CanvasController: ObservableObject {
     let canvasView: DrawingCanvasView
-    
+    let drawingFinished: (() -> Void)?
+    let drawingStarted: (() -> Void)?
     @Published public var isUndoEnabled = false
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
@@ -39,11 +40,13 @@ public class CanvasController: ObservableObject {
             }
         }
     
-    public init() {
+    public init(drawingFinished: (() -> Void)? = nil, drawingStarted: (() -> Void)? = nil) {
         self.canvasView = DrawingCanvasView(frame: .zero)
         self.brushSize = 30
         self.brushColor = .black
         self.blendMode = .brush
+        self.drawingStarted = drawingStarted
+        self.drawingFinished = drawingFinished
         self.canvasView.delegate = self
     }
     
@@ -95,6 +98,18 @@ public class CanvasController: ObservableObject {
 }
 
 extension CanvasController: @preconcurrency DrawingCanvasDelegate {
+    public func didFinishDrawing() {
+        if let action = self.drawingFinished{
+            action()
+        }
+    }
+    
+    public func didStartedDrawing() {
+        if let action = self.drawingStarted{
+            action()
+        }
+    }
+    
     public func stateChangeForUndo(isAvailable: Bool) {
         isUndoEnabled = isAvailable
     }
