@@ -18,8 +18,8 @@ public enum BrushType {
 @MainActor
 public class CanvasController: ObservableObject {
     let canvasView: DrawingCanvasView
-    let drawingFinished: (() -> Void)?
-    let drawingStarted: (() -> Void)?
+    var drawingFinished: (() -> Void)?
+    var drawingStarted: (() -> Void)?
     @Published public var isUndoEnabled = false
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
@@ -40,13 +40,11 @@ public class CanvasController: ObservableObject {
             }
         }
     
-    public init(drawingFinished: (() -> Void)? = nil, drawingStarted: (() -> Void)? = nil) {
+    public init() {
         self.canvasView = DrawingCanvasView(frame: .zero)
         self.brushSize = 30
         self.brushColor = .black
         self.blendMode = .brush
-        self.drawingStarted = drawingStarted
-        self.drawingFinished = drawingFinished
         self.canvasView.delegate = self
     }
     
