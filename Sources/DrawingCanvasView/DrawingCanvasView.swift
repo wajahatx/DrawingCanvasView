@@ -143,7 +143,6 @@ public class DrawingCanvasView: UIView {
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         self.delegate?.didStartedDrawing()
         guard touches.count == 1 else {
-            print("Two fingers detected - preventing drawing")
             return
         }
         guard let touch = touches.first else { return }
@@ -163,12 +162,10 @@ public class DrawingCanvasView: UIView {
         redoStack.removeAll()
     }
     public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        print("drawingcanvas, Touch cancelled, \(touches.count)")
         self.undo()
     }
     
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        print("drawingcanvas, Touch moved, \(touches.count)")
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
@@ -180,7 +177,6 @@ public class DrawingCanvasView: UIView {
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
         lastPoint = .zero
-        print("drawingcanvas, Touch ended, \(touches.count)")
         self.delegate?.didFinishDrawing()
     }
     
