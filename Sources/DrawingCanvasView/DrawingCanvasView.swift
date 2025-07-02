@@ -5,6 +5,8 @@ import UIKit
 public protocol DrawingCanvasDelegate: AnyObject {
     func stateChangeForUndo(isAvailable: Bool)
     func stateChangeForRedo(isAvailable: Bool)
+    func didFinishDrawing()
+    func didStartedDrawing()
 }
 public class DrawingCanvasView: UIView {
     
@@ -15,7 +17,6 @@ public class DrawingCanvasView: UIView {
     private var blendMode: CGBlendMode = .copy
     
     private var lastPoint: CGPoint = .zero
-    private var isDrawing = false
     
     private var mainImage: UIImage?
     
@@ -140,7 +141,10 @@ public class DrawingCanvasView: UIView {
     
     // MARK: - Touch Handling
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        isDrawing = true
+        self.delegate?.didStartedDrawing()
+        guard touches.count == 1 else {
+            return
+        }
         guard let touch = touches.first else { return }
         lastPoint = touch.location(in: self)
         
@@ -157,6 +161,9 @@ public class DrawingCanvasView: UIView {
         // Clear the redo stack because new drawing invalidates redo history
         redoStack.removeAll()
     }
+    public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        self.undo()
+    }
     
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let touch = touches.first else { return }
@@ -170,6 +177,7 @@ public class DrawingCanvasView: UIView {
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
         lastPoint = .zero
+        self.delegate?.didFinishDrawing()
     }
     
     // MARK: - Drawing Logic

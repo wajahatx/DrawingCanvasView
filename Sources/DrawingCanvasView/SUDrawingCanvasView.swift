@@ -18,7 +18,8 @@ public enum BrushType {
 @MainActor
 public class CanvasController: ObservableObject {
     let canvasView: DrawingCanvasView
-    
+    public var drawingFinished: (() -> Void)?
+    public var drawingStarted: (() -> Void)?
     @Published public var isUndoEnabled = false
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
@@ -95,6 +96,18 @@ public class CanvasController: ObservableObject {
 }
 
 extension CanvasController: @preconcurrency DrawingCanvasDelegate {
+    public func didFinishDrawing() {
+        if let action = self.drawingFinished{
+            action()
+        }
+    }
+    
+    public func didStartedDrawing() {
+        if let action = self.drawingStarted{
+            action()
+        }
+    }
+    
     public func stateChangeForUndo(isAvailable: Bool) {
         isUndoEnabled = isAvailable
     }
