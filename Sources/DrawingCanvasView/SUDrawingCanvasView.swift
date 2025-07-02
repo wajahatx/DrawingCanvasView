@@ -18,8 +18,8 @@ public enum BrushType {
 @MainActor
 public class CanvasController: ObservableObject {
     let canvasView: DrawingCanvasView
-    var drawingFinished: (() -> Void)?
-    var drawingStarted: (() -> Void)?
+    public var drawingFinished: (() -> Void)?
+    public var drawingStarted: (() -> Void)?
     @Published public var isUndoEnabled = false
     @Published public var isRedoEnabled = false
     @Published public var brushSize: Double {
