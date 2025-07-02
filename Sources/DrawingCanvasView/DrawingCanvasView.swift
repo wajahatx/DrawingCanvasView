@@ -162,9 +162,13 @@ public class DrawingCanvasView: UIView {
         // Clear the redo stack because new drawing invalidates redo history
         redoStack.removeAll()
     }
+    public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        print("drawingcanvas, Touch cancelled, \(touches.count)")
+        
+    }
     
     public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        print("drawingcanvas, Touch moved")
+        print("drawingcanvas, Touch moved, \(touches.count)")
         guard let touch = touches.first else { return }
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
@@ -176,7 +180,7 @@ public class DrawingCanvasView: UIView {
         let currentPoint = touch.location(in: self)
         drawLine(from: lastPoint, to: currentPoint)
         lastPoint = .zero
-        print("drawingcanvas, Touch ended")
+        print("drawingcanvas, Touch ended, \(touches.count)")
         self.delegate?.didFinishDrawing()
     }
     
