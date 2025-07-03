@@ -133,52 +133,57 @@ public class DrawingCanvasView: UIView {
     // MARK: - Initializers
     public override init(frame: CGRect) {
         super.init(frame: frame)
+        setupGestureRecognizer()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        setupGestureRecognizer()
+    }
+    private func setupGestureRecognizer() {
+            let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+            panGesture.maximumNumberOfTouches = 1
+            self.addGestureRecognizer(panGesture)
     }
     
     // MARK: - Touch Handling
-    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.delegate?.didStartedDrawing()
-        guard touches.count == 1 else {
-            return
-        }
-        guard let touch = touches.first else { return }
-        lastPoint = touch.location(in: self)
-        
-        // Push the current image state onto the undo stack before drawing
-        if let currentImage = mainImage {
-            undoStack.append(currentImage)
-            if undoStack.count > maxUndoRedoStackSize {
-                undoStack.removeFirst()  // Remove oldest image to maintain the limit
+    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+            let currentPoint = gesture.location(in: self)
+
+            switch gesture.state {
+            case .began:
+                delegate?.didStartedDrawing()
+                lastPoint = currentPoint
+
+                // Push the current image state onto the undo stack
+                if let currentImage = mainImage {
+                    undoStack.append(currentImage)
+                    if undoStack.count > maxUndoRedoStackSize {
+                        undoStack.removeFirst() // Keep undo stack within limit
+                    }
+                } else {
+                    undoStack.append(UIImage())
+                }
+
+                // Clear redo stack
+                redoStack.removeAll()
+
+            case .changed:
+                drawLine(from: lastPoint, to: currentPoint)
+                lastPoint = currentPoint
+
+            case .ended:
+                drawLine(from: lastPoint, to: currentPoint)
+                lastPoint = .zero
+                delegate?.didFinishDrawing()
+
+            case .cancelled:
+                undo()
+
+            default:
+                break
             }
-        } else {
-            undoStack.append(UIImage())
         }
-        
-        // Clear the redo stack because new drawing invalidates redo history
-        redoStack.removeAll()
-    }
-    public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        self.undo()
-    }
-    
-    public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let currentPoint = touch.location(in: self)
-        drawLine(from: lastPoint, to: currentPoint)
-        lastPoint = currentPoint
-    }
-    
-    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        let currentPoint = touch.location(in: self)
-        drawLine(from: lastPoint, to: currentPoint)
-        lastPoint = .zero
-        self.delegate?.didFinishDrawing()
-    }
     
     // MARK: - Drawing Logic
     private func drawLine(from startPoint: CGPoint, to endPoint: CGPoint) {
