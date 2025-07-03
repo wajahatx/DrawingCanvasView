@@ -184,45 +184,6 @@ public class DrawingCanvasView: UIView {
                 break
             }
         }
-//    public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-//        self.delegate?.didStartedDrawing()
-//        guard touches.count == 1 else {
-//            return
-//        }
-//        guard let touch = touches.first else { return }
-//        lastPoint = touch.location(in: self)
-//        
-//        // Push the current image state onto the undo stack before drawing
-//        if let currentImage = mainImage {
-//            undoStack.append(currentImage)
-//            if undoStack.count > maxUndoRedoStackSize {
-//                undoStack.removeFirst()  // Remove oldest image to maintain the limit
-//            }
-//        } else {
-//            undoStack.append(UIImage())
-//        }
-//        
-//        // Clear the redo stack because new drawing invalidates redo history
-//        redoStack.removeAll()
-//    }
-//    public override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-//        self.undo()
-//    }
-//    
-//    public override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-//        guard let touch = touches.first else { return }
-//        let currentPoint = touch.location(in: self)
-//        drawLine(from: lastPoint, to: currentPoint)
-//        lastPoint = currentPoint
-//    }
-//    
-//    public override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-//        guard let touch = touches.first else { return }
-//        let currentPoint = touch.location(in: self)
-//        drawLine(from: lastPoint, to: currentPoint)
-//        lastPoint = .zero
-//        self.delegate?.didFinishDrawing()
-//    }
     
     // MARK: - Drawing Logic
     private func drawLine(from startPoint: CGPoint, to endPoint: CGPoint) {
